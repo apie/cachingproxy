@@ -1,4 +1,5 @@
 from quart import Quart, request, render_template_string, redirect, url_for, Response, abort
+import aiofiles
 import aiohttp
 import asyncio
 from bs4 import BeautifulSoup
@@ -189,9 +190,11 @@ async def index():
     """
     return await render_template_string(template)
 
+
+
 @app.route('/proxy')
-async def proxy():
-    """Proxy the requested URL"""
+async def proxy_full_async():
+    """Fully asynchronous version of the proxy"""
     url = request.args.get('url')
     
     if not url:
@@ -217,19 +220,15 @@ async def proxy():
             
             # If it's an image or other binary content
             if os.path.exists(cache_path) and 'text/html' not in content_type:
-                # Read binary content synchronously for now (will make async later)
-                with open(cache_path, 'rb') as f:
-                    content = f.read()
+                content = await read_cache(cache_path, binary=True)
                 return Response(content, content_type=content_type)
             
             # If it's HTML, we need to read and process it
             elif os.path.exists(cache_path):
-                # Read HTML content synchronously for now (will make async later)
-                with open(cache_path, 'r', encoding='utf-8', errors='replace') as f:
-                    content = f.read()
+                content = await read_cache(cache_path)
                 return content
         
-        # Not cached or cache expired, fetch the content asynchronously
+        # Not cached or cache expired, fetch the content
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 # Check for successful response
@@ -263,9 +262,8 @@ async def proxy():
                     # Get binary content
                     content = await response.read()
                     
-                    # Save to cache synchronously for now
-                    with open(cache_path, 'wb') as f:
-                        f.write(content)
+                    # Save to cache
+                    await write_cache(cache_path, content, binary=True)
                     
                     # Return the response
                     return Response(content, content_type=content_type)
@@ -274,9 +272,8 @@ async def proxy():
                 html_content = await response.text()
                 processed_html = rewrite_html(html_content, url)
                 
-                # Save to cache synchronously for now
-                with open(cache_path, 'w', encoding='utf-8') as f:
-                    f.write(processed_html)
+                # Save to cache
+                await write_cache(cache_path, processed_html)
                 
                 return processed_html
                 
@@ -301,150 +298,6 @@ async def proxy():
         </body>
         </html>
         """, url=url, error=str(e))
-
-@app.route('/clear-cache')
-async def clear_cache():
-    """Clear the cache directory"""
-    count = 0
-    for file in os.listdir(CACHE_DIR):
-        file_path = os.path.join(CACHE_DIR, file)
-        if os.path.isfile(file_path):
-            os.unlink(file_path)
-            count += 1
-    
-    return await render_template_string("""
-    <html>
-    <head>
-        <title>Cache Cleared</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-            .info { background: #e8f4e8; padding: 20px; border-radius: 5px; }
-            a { color: #0066cc; }
-        </style>
-    </head>
-    <body>
-        <h1>Cache Cleared</h1>
-        <div class="info">
-            <p>Successfully cleared {{ count }} cached files.</p>
-        </div>
-        <p><a href="/">Back to home</a></p>
-    </body>
-    </html>
-    """, count=count)
-
-# Fully async version with aiofiles for file operations
-try:
-    import aiofiles
-    
-    @app.route('/proxy-full-async')
-    async def proxy_full_async():
-        """Fully asynchronous version of the proxy"""
-        url = request.args.get('url')
-        
-        if not url:
-            return redirect(url_for('index'))
-        
-        try:
-            # Check URL format and add scheme if missing
-            if not url.startswith(('http://', 'https://')):
-                url = 'https://' + url
-            
-            # Check if content is cached
-            is_cached_content = is_cached(url)
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-            
-            if is_cached_content:
-                # Get content type from file or do a HEAD request
-                async with aiohttp.ClientSession() as session:
-                    async with session.head(url, allow_redirects=True, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as head_response:
-                        content_type = head_response.headers.get('content-type', '').lower()
-                
-                # Use appropriate cache path
-                cache_path = get_cache_path(url, content_type)
-                
-                # If it's an image or other binary content
-                if os.path.exists(cache_path) and 'text/html' not in content_type:
-                    content = await read_cache(cache_path, binary=True)
-                    return Response(content, content_type=content_type)
-                
-                # If it's HTML, we need to read and process it
-                elif os.path.exists(cache_path):
-                    content = await read_cache(cache_path)
-                    return content
-            
-            # Not cached or cache expired, fetch the content
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    # Check for successful response
-                    if response.status != 200:
-                        return await render_template_string("""
-                        <html>
-                        <head>
-                            <title>Error</title>
-                            <style>
-                                body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-                                .error { background: #ffeeee; padding: 20px; border-radius: 5px; }
-                                a { color: #0066cc; }
-                            </style>
-                        </head>
-                        <body>
-                            <h1>Error Fetching URL</h1>
-                            <div class="error">
-                                <p>There was an error fetching the requested URL: {{ url }}</p>
-                                <p>Status Code: {{ status_code }}</p>
-                            </div>
-                            <p><a href="/">Back to home</a></p>
-                        </body>
-                        </html>
-                        """, url=url, status_code=response.status)
-                    
-                    content_type = response.headers.get('content-type', '').lower()
-                    cache_path = get_cache_path(url, content_type)
-                    
-                    # Handle binary content (images, etc.)
-                    if 'text/html' not in content_type:
-                        # Get binary content
-                        content = await response.read()
-                        
-                        # Save to cache
-                        await write_cache(cache_path, content, binary=True)
-                        
-                        # Return the response
-                        return Response(content, content_type=content_type)
-                    
-                    # Handle HTML content
-                    html_content = await response.text()
-                    processed_html = rewrite_html(html_content, url)
-                    
-                    # Save to cache
-                    await write_cache(cache_path, processed_html)
-                    
-                    return processed_html
-                    
-        except Exception as e:
-            return await render_template_string("""
-            <html>
-            <head>
-                <title>Error</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-                    .error { background: #ffeeee; padding: 20px; border-radius: 5px; }
-                    a { color: #0066cc; }
-                </style>
-            </head>
-            <body>
-                <h1>Error Fetching URL</h1>
-                <div class="error">
-                    <p>There was an error fetching the requested URL: {{ url }}</p>
-                    <p>Error: {{ error }}</p>
-                </div>
-                <p><a href="/">Back to home</a></p>
-            </body>
-            </html>
-            """, url=url, error=str(e))
-except ImportError:
-    # aiofiles not available, stick with regular proxy route
-    pass
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
