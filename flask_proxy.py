@@ -28,6 +28,7 @@ app = Quart(__name__)
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
+ALLOW_URLS = ["http://example.com", "https://adventofcode.com"]
 ONE_MINUTE_IN_SECONDS = 60
 ONE_HOUR_IN_SECONDS = 60 * ONE_MINUTE_IN_SECONDS
 ONE_DAY_IN_SECONDS = 24 * ONE_HOUR_IN_SECONDS
@@ -241,6 +242,18 @@ async def proxy_full_async():
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
 
+        allowed = True
+        print(f"{url=}")
+        for allowed_url in ALLOW_URLS:
+            print(f"{allowed_url=}")
+            allowed = False
+            if url.startswith(allowed_url):
+                allowed = True
+                print(f"{url} allowed as {allowed_url}")
+                break
+
+        if not allowed:
+            raise Exception("Forbidden URL!")
         # Check if content is cached
         is_cached_content = is_cached(url)
         headers = {
