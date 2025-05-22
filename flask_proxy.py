@@ -154,6 +154,15 @@ def rewrite_html(html_content, base_url):
     meta_tag = soup.new_tag("meta")
     meta_tag["name"] = "viewport"
     meta_tag["content"] = "width=device-width, initial-scale=1.0"
+    stylesheet2 = soup.find("link", attrs={
+        "rel": "stylesheet alternate",
+    })
+    if stylesheet2:
+        stylesheet = soup.find("link", attrs={
+            "rel": "stylesheet",
+        })
+        stylesheet["rel"] = "ONZIN"  # Make invalid
+        stylesheet2["rel"] = "stylesheet"  # Make default
     if not soup.find("base"):
         if soup.head:
             soup.head.insert(0, base_tag)
