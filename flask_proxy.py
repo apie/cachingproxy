@@ -18,6 +18,9 @@ import mimetypes
 import urllib.parse
 from urllib.parse import urlparse, urljoin
 import time
+import pathlib
+
+# written with help of Claude.ai
 
 app = Quart(__name__)
 
@@ -25,31 +28,45 @@ app = Quart(__name__)
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
+ONE_MINUTE_IN_SECONDS = 60
+ONE_HOUR_IN_SECONDS = 60 * ONE_MINUTE_IN_SECONDS
+ONE_DAY_IN_SECONDS = 24 * ONE_HOUR_IN_SECONDS
+
+
+def encode_url(url):
+    """https://stackoverflow.com/questions/66926813/use-url-as-filename"""
+    return url.replace("/", "$").replace(":", "#")
+
 
 def get_cache_path(url, content_type=None):
     """Generate a cache file path based on URL"""
     url_hash = hashlib.md5(url.encode()).hexdigest()
+    parsed = urlparse(url)
+    url_hash = encode_url(url)
 
+    ext = ".html"
     if content_type and "image" in content_type:
         # Extract extension from content type or URL
         ext = (
-            mimetypes.guess_extension(content_type)
-            or os.path.splitext(urlparse(url).path)[1]
+            mimetypes.guess_extension(content_type) or os.path.splitext(parsed.path)[1]
         )
         if not ext:
             ext = ".bin"  # Default extension if we can't determine it
-        return os.path.join(CACHE_DIR, f"{url_hash}{ext}")
-    else:
-        return os.path.join(CACHE_DIR, f"{url_hash}.html")
+    fpath = os.path.join(CACHE_DIR, parsed.netloc, f"{url_hash}{ext}")
+    pathlib.Path(os.path.join(CACHE_DIR, parsed.netloc)).mkdir(exist_ok=True)
+    return fpath
 
 
-def is_cached(url, max_age=3600):
-    """Check if URL is cached and not expired"""
+def is_cached(url, max_age=ONE_DAY_IN_SECONDS):
+    """Check if URL is cached and not expired. Max age in seconds."""
+    # TODO could also use Last-Modified header
     cache_path = get_cache_path(url)
     if os.path.exists(cache_path):
         # Check if cache is fresher than max_age
         if time.time() - os.path.getmtime(cache_path) < max_age:
+            print("YES cached: ", url)
             return True
+    print("not cached: ", url)
     return False
 
 
