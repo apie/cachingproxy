@@ -28,6 +28,7 @@ app = Quart(__name__)
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
+PREFIX = '/cachingproxy'
 ALLOW_URLS = ["http://example.com", "https://adventofcode.com"]
 ONE_MINUTE_IN_SECONDS = 60
 ONE_HOUR_IN_SECONDS = 60 * ONE_MINUTE_IN_SECONDS
@@ -105,10 +106,10 @@ def rewrite_url(url, base_url):
     # Handle relative URLs
     if not url.startswith(("http://", "https://")):
         # Convert to absolute URL based on base_url
-        return f"/proxy?url={urllib.parse.quote(urljoin(base_url, url))}"
+        return f"{PREFIX}/proxy?url={urllib.parse.quote(urljoin(base_url, url))}"
 
     # Absolute URLs
-    return f"/proxy?url={urllib.parse.quote(url)}"
+    return f"{PREFIX}/proxy?url={urllib.parse.quote(url)}"
 
 
 def rewrite_html(html_content, base_url):
@@ -175,54 +176,54 @@ def rewrite_html(html_content, base_url):
     return str(soup)
 
 
-@app.route("/")
+@app.route(f"{PREFIX}/")
 async def index():
     """Display the form to enter a URL"""
-    template = """
+    template = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Async Web Proxy Caching Tool</title>
         <style>
-            body {
+            body {{
                 font-family: Arial, sans-serif;
                 max-width: 800px;
                 margin: 0 auto;
                 padding: 20px;
                 line-height: 1.6;
-            }
-            h1 {
+            }}
+            h1 {{
                 color: #333;
-            }
-            form {
+            }}
+            form {{
                 background: #f8f8f8;
                 padding: 20px;
                 border-radius: 5px;
                 margin: 20px 0;
-            }
-            input[type="url"] {
+            }}
+            input[type="url"] {{
                 width: 80%;
                 padding: 10px;
                 border: 1px solid #ddd;
                 border-radius: 4px;
-            }
-            button {
+            }}
+            button {{
                 background: #4CAF50;
                 color: white;
                 border: none;
                 padding: 10px 15px;
                 border-radius: 4px;
                 cursor: pointer;
-            }
-            button:hover {
+            }}
+            button:hover {{
                 background: #45a049;
-            }
-            .info {
+            }}
+            .info {{
                 background: #e7f3ff;
                 padding: 15px;
                 border-radius: 5px;
                 margin-bottom: 20px;
-            }
+            }}
         </style>
     </head>
     <body>
@@ -232,7 +233,7 @@ async def index():
             Enter a URL to view through the proxy. The page will be cached for faster subsequent access.
         </div>
         
-        <form action="/proxy" method="get">
+        <form action="{PREFIX}/proxy" method="get">
             <input type="url" name="url" placeholder="https://example.com" required>
             <button type="submit">Load URL</button>
         </form>
@@ -242,7 +243,7 @@ async def index():
     return await render_template_string(template)
 
 
-@app.route("/proxy")
+@app.route(f"{PREFIX}/proxy")
 async def proxy_full_async():
     """Fully asynchronous version of the proxy"""
     url = request.args.get("url")
