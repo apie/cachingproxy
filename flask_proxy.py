@@ -151,9 +151,13 @@ def rewrite_html(html_content, base_url):
     # Add base target to keep everything in the proxy
     base_tag = soup.find("base") or soup.new_tag("base")
     base_tag["target"] = "_self"
+    meta_tag = soup.new_tag("meta")
+    meta_tag["name"] = "viewport"
+    meta_tag["content"] = "width=device-width, initial-scale=1.0"
     if not soup.find("base"):
         if soup.head:
             soup.head.insert(0, base_tag)
+            soup.head.append(meta_tag)
         elif soup.html:
             head = soup.new_tag("head")
             head.append(base_tag)
