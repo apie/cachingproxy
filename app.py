@@ -71,9 +71,9 @@ def is_cached(url, max_age=DEFAULT_CACHE_EXPIRY):
     if os.path.exists(cache_path):
         # Check if cache is fresher than max_age
         if time.time() - os.path.getmtime(cache_path) < max_age:
-            print("YES cached: ", url)
+            print("YES cached:", url)
             return True
-    print("not cached: ", url)
+    print("NOT cached:", url)
     return False
 
 
@@ -263,13 +263,11 @@ async def proxy_full_async():
             url = "https://" + url
 
         allowed = True
-        print(f"{url=}")
+        # print(f"{url=}")
         for allowed_url in ALLOW_URLS:
-            print(f"{allowed_url=}")
             allowed = False
             if url.startswith(allowed_url):
                 allowed = True
-                print(f"{url} allowed as {allowed_url}")
                 break
 
         if not allowed:
@@ -281,28 +279,18 @@ async def proxy_full_async():
         }
 
         if is_cached_content:
-            # Get content type from file or do a HEAD request
-            async with aiohttp.ClientSession() as session:
-                async with session.head(
-                    url,
-                    allow_redirects=True,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as head_response:
-                    content_type = head_response.headers.get("content-type", "").lower()
-
             # Use appropriate cache path
-            cache_path = get_cache_path(url, content_type)
+            cache_path = get_cache_path(url)
+            if os.path.exists(cache_path):
+                if cache_path.endswith('.html'):
+                    # If it's HTML, we need to read and process it
+                    content = await read_cache(cache_path)
+                    return content
+                else:
+                    # If it's an image or other binary content
+                    content = await read_cache(cache_path, binary=True)
+                    return Response(content, content_type='image')
 
-            # If it's an image or other binary content
-            if os.path.exists(cache_path) and "text/html" not in content_type:
-                content = await read_cache(cache_path, binary=True)
-                return Response(content, content_type=content_type)
-
-            # If it's HTML, we need to read and process it
-            elif os.path.exists(cache_path):
-                content = await read_cache(cache_path)
-                return content
 
         # Not cached or cache expired, fetch the content
         async with aiohttp.ClientSession() as session:
