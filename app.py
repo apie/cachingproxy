@@ -5,15 +5,12 @@ from quart import (
     redirect,
     url_for,
     Response,
-    abort,
 )
 import aiofiles
 import aiohttp
-import asyncio
 from bs4 import BeautifulSoup
 import os
 import hashlib
-import re
 import mimetypes
 import urllib.parse
 from urllib.parse import urlparse, urljoin
@@ -33,7 +30,15 @@ ALLOW_URLS = ["http://example.com", "https://adventofcode.com"]
 ONE_MINUTE_IN_SECONDS = 60
 ONE_HOUR_IN_SECONDS = 60 * ONE_MINUTE_IN_SECONDS
 ONE_DAY_IN_SECONDS = 24 * ONE_HOUR_IN_SECONDS
+ONE_YEAR_IN_SECONDS = 365 * ONE_DAY_IN_SECONDS
+DEFAULT_CACHE_EXPIRY = ONE_YEAR_IN_SECONDS
 
+def readable(num_seconds: int) -> str:
+    if num_seconds == ONE_DAY_IN_SECONDS:
+        return "one day"
+    if num_seconds == ONE_YEAR_IN_SECONDS:
+        return "one year"
+    return f"{num_seconds} seconds"
 
 def encode_url(url):
     """https://stackoverflow.com/questions/66926813/use-url-as-filename"""
@@ -59,7 +64,7 @@ def get_cache_path(url, content_type=None):
     return fpath
 
 
-def is_cached(url, max_age=ONE_DAY_IN_SECONDS):
+def is_cached(url, max_age=DEFAULT_CACHE_EXPIRY):
     """Check if URL is cached and not expired. Max age in seconds."""
     # TODO could also use Last-Modified header
     cache_path = get_cache_path(url)
@@ -230,7 +235,8 @@ async def index():
         <h1>Async Web Proxy Caching Tool</h1>
         
         <div class="info">
-            Enter a URL to view through the proxy. The page will be cached for faster subsequent access.
+            Enter a URL to view through the proxy. The page will be cached ({readable(DEFAULT_CACHE_EXPIRY)}) for faster subsequent access.
+            Note: Only a small number of urls are allowed!
         </div>
         
         <form action="{PREFIX}/proxy" method="get">
